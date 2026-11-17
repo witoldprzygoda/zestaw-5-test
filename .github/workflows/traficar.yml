@@ -5,7 +5,7 @@ on:
   # START ZBIERANIA: usun znaki # z dwoch linii ponizej i wpisz dwie minuty
   # oddalone o 30, np. "7,37 * * * *" (odczyt co 30 minut, czas UTC).
   schedule:
-    - cron: "*/5 * * * *"   # TEST: co 5 minut
+    - cron: "3,13,23,33,43,53 * * * *"   # TEST 2: co 10 minut
 
 permissions:
   contents: write   # zapis bazy w repozytorium
