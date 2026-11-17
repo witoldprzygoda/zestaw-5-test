@@ -1,0 +1,56 @@
+name: Zbieranie danych Traficar
+
+on:
+  workflow_dispatch:
+  # START ZBIERANIA: usun znaki # z dwoch linii ponizej i wpisz dwie minuty
+  # oddalone o 30, np. "7,37 * * * *" (odczyt co 30 minut, czas UTC).
+  schedule:
+    - cron: "*/5 * * * *"   # TEST: co 5 minut
+
+permissions:
+  contents: write   # zapis bazy w repozytorium
+  actions: write    # samodzielne wylaczenie po zebraniu danych
+
+concurrency:
+  group: traficar
+  cancel-in-progress: false
+
+env:
+  BAZA: ZADANIE3/dane/traficar.db
+  GODZINY: "0.5"           # TEST: koniec po 30 minutach ciaglej serii
+  LIMIT_URUCHOMIEN: "400"  # bezpiecznik: wylaczenie niezaleznie od stanu danych
+
+jobs:
+  odczyt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Instalacja bibliotek
+        run: pip install requests
+      - name: Odczyt danych
+        run: python -m ZADANIE3.monitor --baza "$BAZA"
+      - name: Zapis bazy w repozytorium
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f "$BAZA"
+          if git diff --cached --quiet; then echo "Brak nowych danych"; exit 0; fi
+          git commit -q -m "Odczyt Traficar $(date -u +%Y-%m-%dT%H:%MZ)"
+          for proba in 1 2 3; do
+            git pull -q --rebase && git push -q && exit 0
+            sleep 5
+          done
+          exit 1
+      - name: Stan zbierania
+        id: stan
+        if: always()
+        run: python .github/scripts/stan_zbierania.py "$BAZA" "$GODZINY"
+      - name: Wylaczenie po zakonczeniu
+        if: always() && github.event_name == 'schedule' && (steps.stan.outputs.koniec == 'true' || github.run_number > fromJSON(env.LIMIT_URUCHOMIEN))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow disable traficar.yml --repo "$GITHUB_REPOSITORY"
